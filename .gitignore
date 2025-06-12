@@ -9,3 +9,6 @@ dist/
 db.sqlite
 .idea
 .tee-cloud
+
+output.png
+/data
