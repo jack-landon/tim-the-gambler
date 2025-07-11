@@ -11,3 +11,5 @@ db.sqlite
 
 output.png
 /data
+
+docker-compose-image.yaml

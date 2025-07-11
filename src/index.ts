@@ -168,9 +168,6 @@ async function startAgent(character: Character, directClient: DirectClient) {
       process.env.POLYMARKET_PROXY_ADDRESS
     );
 
-    // const apiKey = await clobClient.createOrDeriveApiKey();
-    // console.log("Polymarket API Key created:", apiKey);
-
     const clobBalance = await clobClient.getBalanceAllowance({
       asset_type: AssetType.COLLATERAL,
     });
@@ -178,8 +175,19 @@ async function startAgent(character: Character, directClient: DirectClient) {
     const polymarketBalance = clobBalance.balance; // 6 decimals, i.e. 100000 = 1.0 USDC
     console.log(`Polymarket balance: ${polymarketBalance} USDC`);
 
-    initializeCryptoNewsTweets(runtime, scraper);
-    // initializePolymarketBet(runtime, clobClient, scraper);
+    initializeCryptoNewsTweets({
+      runtime,
+      scraper,
+      interval: process.env.NEWS_POST_INTERVAL,
+      runOnStartup: false,
+    });
+    initializePolymarketBet({
+      runtime,
+      clobClient,
+      scraper,
+      interval: process.env.BET_INTERVAL,
+      runOnStartup: true,
+    });
 
     return runtime;
   } catch (error) {

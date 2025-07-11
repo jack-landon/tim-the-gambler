@@ -125,18 +125,26 @@ type CreatePolymarketOrderParams = {
   amount: number;
 };
 
-export async function initializePolymarketBet(
-  runtime: IAgentRuntime,
-  clobClient: ClobClient,
-  scraper: Scraper
-) {
-  await makeBet(scraper, clobClient, runtime);
-  schedule.scheduleJob(
-    `*/${process.env.BET_INTERVAL} * * * *`,
-    async function () {
-      await makeBet(scraper, clobClient, runtime);
-    }
-  );
+type InitPolymarkBets = {
+  runtime: IAgentRuntime;
+  clobClient: ClobClient;
+  scraper: Scraper;
+  interval: string; // in minutes
+  runOnStartup: boolean; // Whether to run the bet immediately on startup
+};
+
+export async function initializePolymarketBet({
+  runtime,
+  clobClient,
+  scraper,
+  interval,
+  runOnStartup,
+}: InitPolymarkBets) {
+  if (runOnStartup) await makeBet(scraper, clobClient, runtime);
+
+  schedule.scheduleJob(`*/${interval} * * * *`, async function () {
+    await makeBet(scraper, clobClient, runtime);
+  });
 }
 
 async function makeBet(
@@ -187,17 +195,28 @@ async function makeBet(
   });
 
   // Now Create a tweet about the bet
-  const generatedText = await generateText({
-    modelClass: ModelClass.SMALL,
-    context: `I just bet $${orderAmount} on ${selectedMarket.question} with the result being "${selectedOutcome}". Write a tweet about this bet which specifically mentions what you bet on and make a funny and slightly sarcastic/offensive remark about it. Do not use any formatting or markdown.`,
-    runtime,
-  });
+  let generatedText = "";
+  let attemptCount = 0;
+
+  while (
+    attemptCount < 4 &&
+    (attemptCount === 0 || generatedText.length > 180)
+  ) {
+    generatedText = await generateText({
+      modelClass: ModelClass.SMALL,
+      context: `I just bet $${orderAmount} on ${selectedMarket.question} with the result being "${selectedOutcome}". Write a tweet under 180 characters about this bet which specifically mentions what you bet on and make a funny and slightly sarcastic/offensive remark about it. Do not use any formatting or markdown.`,
+      runtime,
+    });
+    attemptCount++;
+  }
 
   const sendTweetResults = await scraper.sendTweet(
     `${generatedText}`,
     undefined,
     [{ data: postedImage, mediaType: "image" }]
   );
+
+  console.log("Tweet results:", await sendTweetResults.json());
 
   if (sendTweetResults.ok) {
     console.log(`Bet tweet for ${selectedMarket.question} is successful`);
@@ -206,16 +225,19 @@ async function makeBet(
 
 async function selectBet() {
   const marketReq = await fetch(
-    "https://gamma-api.polymarket.com/markets?limit=50&ascending=true&active=true&closed=false"
+    "https://gamma-api.polymarket.com/markets?limit=400&ascending=true&active=true&closed=false"
   );
   const marketRes = (await marketReq.json()) as PolymarketMarket[];
-  const activeMarkets = marketRes
+
+  const shuffledMarkets = marketRes.sort(() => Math.random() - 0.5);
+
+  const activeMarkets = shuffledMarkets
     .filter((market) => market.question && market.question.length > 0)
     .filter((market) => market.outcomePrices)
     .filter(
       (market) => market.endDate && dayjs(market.endDate).isAfter(dayjs())
     )
-    .filter((market) => market.volume1wk && market.volume1wk > 1000)
+    .filter((market) => market.volume1wk && market.volume1wk > 2000)
     .filter((market) => market.clobTokenIds);
 
   console.log(
@@ -235,7 +257,7 @@ async function selectBet() {
     );
     // Probability must be betweet 0.1 and 0.9
     return probabilities.some(
-      (probability) => probability > 0.1 && probability < 0.9
+      (probability) => probability > 0.45 && probability < 0.65
     );
   });
 
@@ -276,7 +298,13 @@ async function selectBet() {
     const currPrice = parseFloat(
       JSON.parse(selectedMarket.outcomePrices)[potentialOutcomes.indexOf(curr)]
     );
-    return currPrice > prevPrice ? curr : prev;
+    let mostLikelyOrLeast: "least" | "most" = "least";
+
+    if (mostLikelyOrLeast == "least") {
+      return currPrice < prevPrice ? curr : prev;
+    } else {
+      return currPrice > prevPrice ? curr : prev;
+    }
   }, potentialOutcomes[0]);
 
   console.log("Selected outcome:", selectedOutcome);

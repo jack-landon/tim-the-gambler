@@ -24,8 +24,13 @@ COPY ./src ./src
 COPY ./characters ./characters
 
 # Install dependencies and build the project
-RUN pnpm install 
-RUN pnpm build 
+RUN pnpm install --frozen-lockfile
+RUN pnpm exec playwright install
+RUN pnpm build
+
+# Add Playwright
+# RUN pnpm i -D @playwright/test
+# RUN pnpm exec playwright install
 
 # Create dist directory and set permissions
 RUN mkdir -p /app/dist && \

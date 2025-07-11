@@ -2,18 +2,25 @@ import { generateText, IAgentRuntime, ModelClass } from "@elizaos/core";
 import { Scraper } from "agent-twitter-client";
 import schedule from "node-schedule";
 
-export async function initializeCryptoNewsTweets(
-  runtime: IAgentRuntime,
-  scraper: Scraper
-) {
+type InitializeCryptoNewsTweetsOptions = {
+  runtime: IAgentRuntime;
+  scraper: Scraper;
+  interval: string; // in minutes
+  runOnStartup: boolean;
+};
+
+export async function initializeCryptoNewsTweets({
+  runtime,
+  scraper,
+  interval,
+  runOnStartup,
+}: InitializeCryptoNewsTweetsOptions) {
   try {
-    await postCryptoNewsTweets(scraper, runtime);
-    schedule.scheduleJob(
-      `*/${process.env.NEWS_POST_INTERVAL} * * * *`,
-      async function () {
-        await postCryptoNewsTweets(scraper, runtime);
-      }
-    );
+    if (runOnStartup) await postCryptoNewsTweets(scraper, runtime);
+
+    schedule.scheduleJob(`*/${interval} * * * *`, async function () {
+      await postCryptoNewsTweets(scraper, runtime);
+    });
   } catch (error) {
     console.log("Error generating text:", error);
   }
@@ -56,7 +63,7 @@ async function postCryptoNewsTweets(scraper: Scraper, runtime: IAgentRuntime) {
       modelClass: ModelClass.SMALL,
       context: `Here are the latest crypto news articles:\n${articleTitles.join(
         "\n"
-      )}. Write an insightful tweet about recent crypto news headlines WITHOUT FORMATTING OR MARKDOWN.`,
+      )}. Write an insightful tweet about recent crypto news headlines WITHOUT FORMATTING OR MARKDOWN. Also DO NOT USE HASHTAGS.`,
       runtime,
     });
   }
