@@ -25,7 +25,7 @@ COPY ./characters ./characters
 
 # Install dependencies and build the project
 RUN pnpm install --frozen-lockfile
-RUN pnpm exec playwright install
+RUN pnpm exec playwright install --with-deps
 RUN pnpm build
 
 # Add Playwright
